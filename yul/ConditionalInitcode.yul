@@ -1,4 +1,4 @@
-object "Basefee" {
+object "ConditionalInitcode" {
     code {
         datacopy(returndatasize(), dataoffset("runtime"), datasize("runtime"))
         return(returndatasize(), datasize("runtime"))
