@@ -20,11 +20,9 @@ contract EscapeHatchTest is SoladyTest {
 
     address internal _escapeHatch;
 
-    string internal constant _FOO = "The quick brown fox jumps over the lazy dog.";
+    uint256 internal _ticker;
 
-    address internal constant _ALICE = address(bytes20(keccak256("alice")));
-    address internal constant _BOB = address(bytes20(keccak256("bob")));
-    address internal constant _CHARLIE = address(bytes20(keccak256("charlie")));
+    string internal constant _FOO = "The quick brown fox jumps over the lazy dog.";
 
     bytes32 internal _dataAndValueHash;
 
@@ -42,8 +40,23 @@ contract EscapeHatchTest is SoladyTest {
     // yul/Gaslimit.yul              0x0b          7
     // yul/Basefee.yul               0x0c          8
 
-    function setUp() public {
-        bytes memory runtime = vm.parseBytes(vm.readFile("test/data/runtime.txt"));
+    function _deployWithPush0() internal {
+        vm.chainId(1);
+        bytes memory runtime = vm.parseBytes(vm.readFile("test/data/runtime_with_push0.txt"));
+        bytes memory initcode = vm.parseBytes(vm.readFile("test/data/initcode.txt"));
+        address instance;
+        /// @solidity memory-safe-assembly
+        assembly {
+            instance := create(0, add(initcode, 0x20), mload(initcode))
+        }
+        emit LogBytes32(keccak256(initcode));
+        assertEq(instance.code, runtime);
+        _escapeHatch = instance;
+    }
+
+    function _deployWithoutPush0() internal {
+        vm.chainId(2);
+        bytes memory runtime = vm.parseBytes(vm.readFile("test/data/runtime_without_push0.txt"));
         bytes memory initcode = vm.parseBytes(vm.readFile("test/data/initcode.txt"));
         address instance;
         /// @solidity memory-safe-assembly
@@ -65,7 +78,14 @@ contract EscapeHatchTest is SoladyTest {
         bytes dataToSelf;
     }
 
-    function testCreate() public {
+    modifier testWithAndWithoutPush0() {
+        _deployWithPush0();
+        _;
+        _deployWithoutPush0();
+        _;
+    }
+
+    function testCreate() public testWithAndWithoutPush0 {
         _TestTemps memory t;
         t.data = abi.encodePacked(uint8(0x04), type(MockSimpleContract).creationCode, uint256(0));
         vm.deal(address(this), 100 ether);
@@ -78,7 +98,7 @@ contract EscapeHatchTest is SoladyTest {
         assertEq(t.mock.balance, t.amount);
     }
 
-    function testCreate2AndExtcodeOps() public {
+    function testCreate2AndExtcodeOps() public testWithAndWithoutPush0 {
         _TestTemps memory t;
         t.data = abi.encodePacked(uint8(0x05), bytes32(0), type(MockSimpleContract).creationCode, uint256(0));
         vm.deal(address(this), 100 ether);
@@ -117,7 +137,7 @@ contract EscapeHatchTest is SoladyTest {
         assertEq(abi.decode(t.result, (bytes32)), keccak256(t.mock.code));
     }
 
-    function testGasLimitedStaticcall() public {
+    function testGasLimitedStaticcall() public testWithAndWithoutPush0 {
         _TestTemps memory t;
         t.sample = "3763124908736214987594532104983751cvbhadhgfwkeruiywtqerZ";
         t.dataToSelf = abi.encodeWithSignature("revertIfGasBelow(uint256,bytes)", uint256(50000), t.sample);
@@ -142,7 +162,7 @@ contract EscapeHatchTest is SoladyTest {
         return data;
     }
 
-    function testGasLimitedCall() public {
+    function testGasLimitedCall() public testWithAndWithoutPush0 {
         _TestTemps memory t;
         t.sample = "3763124908736214987594532104983751cvbhadhgfwkeruiywtqerZ";
         t.dataToSelf = abi.encodeWithSignature("revertIfGasBelowOrSet(uint256,bytes)", uint256(50000), t.sample);
@@ -166,14 +186,14 @@ contract EscapeHatchTest is SoladyTest {
         return data;
     }
 
-    function testGas() public view {
+    function testGas() public testWithAndWithoutPush0 {
         bytes memory data = abi.encodePacked(uint8(0x09));
         (bool success, bytes memory result) = _escapeHatch.staticcall(data);
         assertEq(success, true);
         assertGt(abi.decode(result, (uint256)), 0);
     }
 
-    function testGasprice() public {
+    function testGasprice() public testWithAndWithoutPush0 {
         vm.txGasPrice(12345);
         bytes memory data = abi.encodePacked(uint8(0x0a));
         (bool success, bytes memory result) = _escapeHatch.staticcall(data);
@@ -181,14 +201,14 @@ contract EscapeHatchTest is SoladyTest {
         assertEq(abi.decode(result, (uint256)), 12345);
     }
 
-    function testGaslimit() public view {
+    function testGaslimit() public testWithAndWithoutPush0 {
         bytes memory data = abi.encodePacked(uint8(0x0b));
         (bool success, bytes memory result) = _escapeHatch.staticcall(data);
         assertEq(success, true);
         assertEq(abi.decode(result, (uint256)), block.gaslimit);
     }
 
-    function testBaseFee() public {
+    function testBaseFee() public testWithAndWithoutPush0 {
         vm.fee(112233);
         bytes memory data = abi.encodePacked(uint8(0x0c));
         (bool success, bytes memory result) = _escapeHatch.staticcall(data);
@@ -196,19 +216,21 @@ contract EscapeHatchTest is SoladyTest {
         assertEq(abi.decode(result, (uint256)), 112233);
     }
 
-    function testForceSendEther() public {
+    function testForceSendEther() public testWithAndWithoutPush0 {
         vm.deal(address(this), 100 ether);
 
         uint256 amount = 0.1 ether;
-        _forceSendEther(_ALICE, amount);
-        assertEq(_ALICE.balance, amount);
+        address alice = address(bytes20(keccak256(abi.encode("alice", ++_ticker))));
+        _forceSendEther(alice, amount);
+        assertEq(alice.balance, amount);
 
-        vm.etch(_BOB, hex"3d3dfd");
-        (bool success,) = _BOB.call{value: amount}("");
+        address bob = address(bytes20(keccak256(abi.encode("bob", ++_ticker))));
+        vm.etch(bob, hex"3d3dfd");
+        (bool success,) = bob.call{value: amount}("");
         assertEq(success, false);
-        assertEq(_BOB.balance, 0);
-        _forceSendEther(_BOB, amount);
-        assertEq(_BOB.balance, amount);
+        assertEq(bob.balance, 0);
+        _forceSendEther(bob, amount);
+        assertEq(bob.balance, amount);
     }
 
     function _forceSendEther(address to, uint256 amount) internal {

@@ -1,6 +1,6 @@
 [profile.default]
 solc_version = "0.8.28"
-evm_version = "paris" # Cancun will be tested in the CI.
+evm_version = "shanghai"
 auto_detect_solc = false
 optimizer = true
 optimizer_runs = 1_000

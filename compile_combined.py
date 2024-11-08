@@ -27,7 +27,7 @@ def random_hex_no_prefix(n):
         if len(s) == n * 2:
             return s
 
-def compile_and_get_runtime(file_path, jump_section, stats):
+def compile_and_get_runtime(file_path, jump_section, use_push0, stats):
     with open(file_path, 'r') as file:
         code = file.read()
     
@@ -51,9 +51,13 @@ def compile_and_get_runtime(file_path, jump_section, stats):
         temp_file_path,
         "--bin",
         "--optimize-runs=1",
-        "--evm-version=london",
         "--strict-assembly"
     ]
+    if use_push0:
+        command.append("--evm-version=shanghai")
+    else:
+        command.append("--evm-version=london")
+
     result = subprocess.run(command, capture_output=True, text=True)
     runtime = '5b' + result.stdout.strip().split(sed_from)[-1]
     stats_row = [
@@ -70,11 +74,29 @@ def to_initcode(runtime):
     xxxx = hex_no_prefix(len(runtime) >> 1, 2)
     return '61' + xxxx + '80600a3d393df3' + runtime
 
-def compile_combined(file_paths, stats):
+def to_conditional_initcode(runtime_with_push0, runtime_without_push0):
+    xxxx = hex_no_prefix(len(runtime_with_push0) >> 1, 2)
+    assert(len(runtime_with_push0) == len(runtime_without_push0))
+    command = [
+        "solc",
+        "yul/ConditionalInitcode.yul",
+        "--bin",
+        "--optimize-runs=1",
+        "--strict-assembly",
+        "--evm-version=london"
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    pre = re.findall(r'\b[0-9a-fA-F]+\b', result.stdout.strip())[-1]
+    pre = pre[pre.index('f3fe') + 4:]
+    pre = pre.replace('6033', '60' + hex_no_prefix(len(pre) >> 1, 1))
+    pre = pre.replace('61ffee', '61' + xxxx)
+    return pre + runtime_with_push0 + runtime_without_push0
+
+def compile_combined(file_paths, use_push0, stats):
     global SECTION_SHIFT
     s = [rpad_runtime('3d353d1a60' + hex_no_prefix(SECTION_SHIFT) + '1b56')]
     for i, file_path in enumerate(file_paths):
-        s.append(compile_and_get_runtime(file_path, i + 1, stats))
+        s.append(compile_and_get_runtime(file_path, i + 1, use_push0, stats))
     return ''.join(s)
 
 def print_table(stats):
@@ -103,11 +125,14 @@ file_paths = [
 ]
 
 stats = [['file path', 'jump section', 'runtime bytes']]
-runtime = compile_combined(file_paths, stats)
-with open('test/data/runtime.txt', 'w') as file:
-    file.write(runtime)
+runtime_with_push0 = compile_combined(file_paths, True, stats)
+runtime_without_push0 = compile_combined(file_paths, False, [])
+with open('test/data/runtime_with_push0.txt', 'w') as file:
+    file.write(runtime_with_push0)
+with open('test/data/runtime_without_push0.txt', 'w') as file:
+    file.write(runtime_without_push0)
 
-initcode = to_initcode(runtime)
+initcode = to_conditional_initcode(runtime_with_push0, runtime_without_push0)
 with open('test/data/initcode.txt', 'w') as file:
     file.write(initcode)
 
@@ -120,6 +145,6 @@ print('initcode:')
 print(initcode)
 print('-' * 64)
 
-print('runtime (' + str(len(runtime) >> 1) + ' bytes):')
-print(runtime)
+print('runtime (' + str(len(runtime_with_push0) >> 1) + ' bytes):')
+print(runtime_with_push0)
 print('-' * 64)
