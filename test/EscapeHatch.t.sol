@@ -42,8 +42,8 @@ contract EscapeHatchTest is SoladyTest {
 
     function _deployWithPush0() internal {
         vm.chainId(1);
-        bytes memory runtime = vm.parseBytes(vm.readFile("test/data/runtime_with_push0.txt"));
-        bytes memory initcode = vm.parseBytes(vm.readFile("test/data/initcode.txt"));
+        bytes memory runtime = vm.parseBytes(vm.readFile("deployments/runtime_with_push0.txt"));
+        bytes memory initcode = vm.parseBytes(vm.readFile("deployments/initcode.txt"));
         address instance;
         /// @solidity memory-safe-assembly
         assembly {
@@ -56,8 +56,8 @@ contract EscapeHatchTest is SoladyTest {
 
     function _deployWithoutPush0() internal {
         vm.chainId(2);
-        bytes memory runtime = vm.parseBytes(vm.readFile("test/data/runtime_without_push0.txt"));
-        bytes memory initcode = vm.parseBytes(vm.readFile("test/data/initcode.txt"));
+        bytes memory runtime = vm.parseBytes(vm.readFile("deployments/runtime_without_push0.txt"));
+        bytes memory initcode = vm.parseBytes(vm.readFile("deployments/initcode.txt"));
         address instance;
         /// @solidity memory-safe-assembly
         assembly {

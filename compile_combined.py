@@ -130,13 +130,13 @@ file_paths = [
 stats = [['file path', 'jump section', 'runtime bytes']]
 runtime_with_push0 = compile_combined(file_paths, True, stats)
 runtime_without_push0 = compile_combined(file_paths, False, [])
-with open('test/data/runtime_with_push0.txt', 'w') as file:
+with open('deployments/runtime_with_push0.txt', 'w') as file:
     file.write(runtime_with_push0)
-with open('test/data/runtime_without_push0.txt', 'w') as file:
+with open('deployments/runtime_without_push0.txt', 'w') as file:
     file.write(runtime_without_push0)
 
 initcode = to_conditional_initcode(runtime_with_push0, runtime_without_push0)
-with open('test/data/initcode.txt', 'w') as file:
+with open('deployments/initcode.txt', 'w') as file:
     file.write(initcode)
 
 print_table(stats)
