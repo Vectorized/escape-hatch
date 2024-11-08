@@ -68,6 +68,9 @@ def compile_and_get_runtime(file_path, jump_section, use_push0, stats):
     stats.append(stats_row)
     os.remove(temp_file_path)
 
+    if use_push0:
+        runtime = runtime.replace('5f80', '5f5f')
+
     return rpad_runtime(runtime)
 
 def to_initcode(runtime):
