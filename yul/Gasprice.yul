@@ -6,7 +6,7 @@ object "Gasprice" {
     object "runtime" {
         code {
             mstore(returndatasize(), gasprice())
-            return(returndatasize(), 0x20)
+            return(returndatasize(), msize())
         }
     }
 }
