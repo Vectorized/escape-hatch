@@ -50,78 +50,91 @@ contract EscapeHatchTest is SoladyTest {
         assembly {
             instance := create(0, add(initcode, 0x20), mload(initcode))
         }
+        emit LogBytes32(keccak256(initcode));
         assertEq(instance.code, runtime);
         _escapeHatch = instance;
     }
 
+    struct _TestTemps {
+        bytes data;
+        uint256 amount;
+        bool success;
+        bytes result;
+        address mock;
+        bytes sample;
+        bytes dataToSelf;
+    }
+
     function testCreate() public {
-        bytes memory data = abi.encodePacked(uint8(0x04), type(MockSimpleContract).creationCode, uint256(0));
+        _TestTemps memory t;
+        t.data = abi.encodePacked(uint8(0x04), type(MockSimpleContract).creationCode, uint256(0));
         vm.deal(address(this), 100 ether);
 
-        uint256 amount = 0.1 ether;
-        (bool success, bytes memory result) = _escapeHatch.call{value: amount}(data);
-        assertEq(success, true);
-        address instance = abi.decode(result, (address));
-        assertEq(MockSimpleContract(instance).FOO(), _FOO);
-        assertEq(instance.balance, amount);
+        t.amount = 0.1 ether;
+        (t.success, t.result) = _escapeHatch.call{value: t.amount}(t.data);
+        assertEq(t.success, true);
+        t.mock = abi.decode(t.result, (address));
+        assertEq(MockSimpleContract(t.mock).FOO(), _FOO);
+        assertEq(t.mock.balance, t.amount);
     }
 
     function testCreate2AndExtcodeOps() public {
-        bytes memory data = abi.encodePacked(uint8(0x05), bytes32(0), type(MockSimpleContract).creationCode, uint256(0));
+        _TestTemps memory t;
+        t.data = abi.encodePacked(uint8(0x05), bytes32(0), type(MockSimpleContract).creationCode, uint256(0));
         vm.deal(address(this), 100 ether);
 
-        uint256 amount = 0.1 ether;
-        (bool success, bytes memory result) = _escapeHatch.call{value: amount}(data);
-        assertEq(success, true);
-        assertEq(MockSimpleContract(abi.decode(result, (address))).FOO(), _FOO);
-        assertEq(abi.decode(result, (address)).balance, amount);
+        t.amount = 0.1 ether;
+        (t.success, t.result) = _escapeHatch.call{value: t.amount}(t.data);
+        assertEq(t.success, true);
+        t.mock = abi.decode(t.result, (address));
+        assertEq(MockSimpleContract(t.mock).FOO(), _FOO);
+        assertEq(t.mock.balance, t.amount);
 
-        data = abi.encodePacked(uint8(0x05), bytes32(uint256(1)), type(MockSimpleContract).creationCode, uint256(1));
-        (success, result) = _escapeHatch.call{value: amount}(data);
-        assertEq(success, false);
-        assertEq(result, abi.encodePacked(MockSimpleContract.RevertedInConstructor.selector));
+        t.data = abi.encodePacked(uint8(0x05), bytes32(uint256(1)), type(MockSimpleContract).creationCode, uint256(1));
+        (t.success, t.result) = _escapeHatch.call{value: t.amount}(t.data);
+        assertEq(t.success, false);
+        assertEq(t.result, abi.encodePacked(MockSimpleContract.RevertedInConstructor.selector));
 
-        data = abi.encodePacked(uint8(0x05), bytes32(uint256(2)), type(MockSimpleContract).creationCode, uint256(0));
-        (success, result) = _escapeHatch.call{value: amount}(data);
-        assertEq(success, true);
-        assertEq(MockSimpleContract(abi.decode(result, (address))).FOO(), _FOO);
+        t.data = abi.encodePacked(uint8(0x05), bytes32(uint256(2)), type(MockSimpleContract).creationCode, uint256(0));
+        (t.success, t.result) = _escapeHatch.call{value: t.amount}(t.data);
+        assertEq(t.success, true);
+        t.mock = abi.decode(t.result, (address));
+        assertEq(MockSimpleContract(t.mock).FOO(), _FOO);
 
-        address mock = abi.decode(result, (address));
+        t.data = abi.encodePacked(uint8(0x01), uint256(uint160(t.mock)));
+        (t.success, t.result) = _escapeHatch.call(t.data);
+        assertEq(t.success, true);
+        assertEq(abi.decode(t.result, (uint256)), t.mock.code.length);
 
-        data = abi.encodePacked(uint8(0x01), uint256(uint160(mock)));
-        (success, result) = _escapeHatch.call(data);
-        assertEq(success, true);
-        assertEq(abi.decode(result, (uint256)), mock.code.length);
+        t.data = abi.encodePacked(uint8(0x02), uint256(uint160(t.mock)), uint256(0x05), uint256(0x11));
+        (t.success, t.result) = _escapeHatch.call(t.data);
+        assertEq(t.success, true);
+        assertEq(t.result, LibBytes.slice(t.mock.code, uint256(0x05), uint256(0x05) + uint256(0x11)));
 
-        data = abi.encodePacked(uint8(0x02), uint256(uint160(mock)), uint256(0x05), uint256(0x11));
-        (success, result) = _escapeHatch.call(data);
-        assertEq(success, true);
-        assertEq(result, LibBytes.slice(mock.code, uint256(0x05), uint256(0x05) + uint256(0x11)));
-
-        data = abi.encodePacked(uint8(0x03), uint256(uint160(mock)));
-        (success, result) = _escapeHatch.call(data);
-        assertEq(success, true);
-        assertEq(abi.decode(result, (bytes32)), keccak256(mock.code));
+        t.data = abi.encodePacked(uint8(0x03), uint256(uint160(t.mock)));
+        (t.success, t.result) = _escapeHatch.call(t.data);
+        assertEq(t.success, true);
+        assertEq(abi.decode(t.result, (bytes32)), keccak256(t.mock.code));
     }
 
     function testGasLimitedStaticcall() public {
-        bytes memory sample = "3763124908736214987594532104983751cvbhadhgfwkeruiywtqerZ";
-        bytes memory calldataToSelf = abi.encodeWithSignature("revertIfGasBelow(uint256,bytes)", uint256(50000), sample);
-        bytes memory data =
-            abi.encodePacked(uint8(0x08), uint256(30000), uint256(uint160(address(this))), calldataToSelf);
-        (bool success, bytes memory result) = _escapeHatch.call(data);
-        assertEq(success, false);
-        assertEq(result, abi.encodePacked(GasLimitTooLow.selector));
+        _TestTemps memory t;
+        t.sample = "3763124908736214987594532104983751cvbhadhgfwkeruiywtqerZ";
+        t.dataToSelf = abi.encodeWithSignature("revertIfGasBelow(uint256,bytes)", uint256(50000), t.sample);
+        t.data = abi.encodePacked(uint8(0x08), uint256(30000), uint256(uint160(address(this))), t.dataToSelf);
+        (t.success, t.result) = _escapeHatch.call(t.data);
+        assertEq(t.success, false);
+        assertEq(t.result, abi.encodePacked(GasLimitTooLow.selector));
 
-        data = abi.encodePacked(uint8(0x08), uint256(90000), uint256(uint160(address(this))), calldataToSelf);
-        (success, result) = _escapeHatch.call(data);
-        assertEq(success, true);
-        assertEq(result, abi.encode(sample));
+        t.data = abi.encodePacked(uint8(0x08), uint256(90000), uint256(uint160(address(this))), t.dataToSelf);
+        (t.success, t.result) = _escapeHatch.call(t.data);
+        assertEq(t.success, true);
+        assertEq(t.result, abi.encode(t.sample));
 
-        calldataToSelf = abi.encodeWithSignature("revertIfGasBelowOrSet(uint256,bytes)", uint256(50000), sample);
-        data = abi.encodePacked(uint8(0x08), uint256(90000), uint256(uint160(address(this))), calldataToSelf);
-        (success, result) = _escapeHatch.call(data);
-        assertEq(success, false);
+        t.dataToSelf = abi.encodeWithSignature("revertIfGasBelowOrSet(uint256,bytes)", uint256(50000), t.sample);
+        t.data = abi.encodePacked(uint8(0x08), uint256(90000), uint256(uint160(address(this))), t.dataToSelf);
+        (t.success, t.result) = _escapeHatch.call(t.data);
+        assertEq(t.success, false);
     }
 
     function revertIfGasBelow(uint256 thres, bytes memory data) public view returns (bytes memory) {
@@ -130,22 +143,21 @@ contract EscapeHatchTest is SoladyTest {
     }
 
     function testGasLimitedCall() public {
-        bytes memory sample = "3763124908736214987594532104983751cvbhadhgfwkeruiywtqerZ";
-        bytes memory calldataToSelf =
-            abi.encodeWithSignature("revertIfGasBelowOrSet(uint256,bytes)", uint256(50000), sample);
-        bytes memory data =
-            abi.encodePacked(uint8(0x07), uint256(30000), uint256(uint160(address(this))), calldataToSelf);
-        (bool success, bytes memory result) = _escapeHatch.call(data);
-        assertEq(success, false);
-        assertEq(result, abi.encodePacked(GasLimitTooLow.selector));
+        _TestTemps memory t;
+        t.sample = "3763124908736214987594532104983751cvbhadhgfwkeruiywtqerZ";
+        t.dataToSelf = abi.encodeWithSignature("revertIfGasBelowOrSet(uint256,bytes)", uint256(50000), t.sample);
+        t.data = abi.encodePacked(uint8(0x07), uint256(30000), uint256(uint160(address(this))), t.dataToSelf);
+        (t.success, t.result) = _escapeHatch.call(t.data);
+        assertEq(t.success, false);
+        assertEq(t.result, abi.encodePacked(GasLimitTooLow.selector));
         vm.deal(address(this), 100 ether);
 
-        data = abi.encodePacked(uint8(0x07), uint256(90000), uint256(uint160(address(this))), calldataToSelf);
-        uint256 amount = 0.1 ether;
-        (success, result) = _escapeHatch.call{value: amount}(data);
-        assertEq(success, true);
-        assertEq(result, abi.encode(sample));
-        assertEq(_dataAndValueHash, keccak256(abi.encode(amount, sample)));
+        t.data = abi.encodePacked(uint8(0x07), uint256(90000), uint256(uint160(address(this))), t.dataToSelf);
+        t.amount = 0.1 ether;
+        (t.success, t.result) = _escapeHatch.call{value: t.amount}(t.data);
+        assertEq(t.success, true);
+        assertEq(t.result, abi.encode(t.sample));
+        assertEq(_dataAndValueHash, keccak256(abi.encode(t.amount, t.sample)));
     }
 
     function revertIfGasBelowOrSet(uint256 thres, bytes memory data) public payable returns (bytes memory) {
@@ -201,7 +213,8 @@ contract EscapeHatchTest is SoladyTest {
 
     function _forceSendEther(address to, uint256 amount) internal {
         bytes memory data = abi.encodePacked(uint8(0x06), uint256(50000), uint256(uint160(to)));
-        (bool success,) = _escapeHatch.call{value: amount}(data);
+        (bool success, bytes memory result) = _escapeHatch.call{value: amount}(data);
         assertEq(success, true);
+        assertEq(result, abi.encode(uint256(1)));
     }
 }

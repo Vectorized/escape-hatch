@@ -2,6 +2,7 @@ import subprocess
 import re
 import random
 import os
+import hashlib
 
 SECTION_SHIFT = 6
 SECTION_LENGTH = 1 << SECTION_SHIFT
@@ -81,6 +82,11 @@ def print_table(stats):
     for row in stats:
         print("  ".join(str(c).ljust(w) for c, w in zip(row, col_widths)))
 
+def keccak256_of_hex(hex_string):
+    command = ["cast", "k", "0x" + hex_string]
+    result = subprocess.run(command, capture_output=True, text=True)
+    return result.stdout.strip()
+
 file_paths = [
     'yul/Extcodesize.yul', 
     'yul/Extcodecopy.yul', 
@@ -106,6 +112,9 @@ with open('test/data/initcode.txt', 'w') as file:
     file.write(initcode)
 
 print_table(stats)
+print('-' * 64)
+print('initcodehash:')
+print(keccak256_of_hex(initcode))
 print('-' * 64)
 print('initcode:')
 print(initcode)
