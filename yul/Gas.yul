@@ -6,7 +6,7 @@ object "Gas" {
     object "runtime" {
         code {
             mstore(returndatasize(), gas())
-            return(returndatasize(), 0x20)
+            return(returndatasize(), msize())
         }
     }
 }

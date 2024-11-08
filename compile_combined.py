@@ -6,7 +6,7 @@ import os
 SECTION_SHIFT = 6
 SECTION_LENGTH = 1 << SECTION_SHIFT
 
-def rpad_hex(s):
+def rpad_runtime(s):
     global SECTION_LENGTH
     n = (len(s) >> 1)
     assert(n <= SECTION_LENGTH)
@@ -55,10 +55,15 @@ def compile_and_get_runtime(file_path, jump_section, stats):
     ]
     result = subprocess.run(command, capture_output=True, text=True)
     runtime = '5b' + result.stdout.strip().split(sed_from)[-1]
-    stats.append([file_path, str(jump_section), str(len(runtime) >> 1)])
+    stats_row = [
+        file_path,
+        '0x' + hex_no_prefix(jump_section, 1),
+        str(len(runtime) >> 1)
+    ]
+    stats.append(stats_row)
     os.remove(temp_file_path)
 
-    return rpad_hex(runtime)
+    return rpad_runtime(runtime)
 
 def to_initcode(runtime):
     xxxx = hex_no_prefix(len(runtime) >> 1, 2)
@@ -66,7 +71,7 @@ def to_initcode(runtime):
 
 def compile_combined(file_paths, stats):
     global SECTION_SHIFT
-    s = [rpad_hex('3d353d1a60' + hex_no_prefix(SECTION_SHIFT) + '1b56')]
+    s = [rpad_runtime('3d353d1a60' + hex_no_prefix(SECTION_SHIFT) + '1b56')]
     for i, file_path in enumerate(file_paths):
         s.append(compile_and_get_runtime(file_path, i + 1, stats))
     return ''.join(s)
@@ -79,6 +84,7 @@ def print_table(stats):
 file_paths = [
     'yul/Extcodesize.yul', 
     'yul/Extcodecopy.yul', 
+    'yul/Extcodehash.yul', 
     'yul/Create.yul',
     'yul/Create2.yul',
     'yul/ForceSendEther.yul',
