@@ -50,7 +50,7 @@ def compile_and_get_runtime(file_path, jump_section, stats):
         temp_file_path,
         "--bin",
         "--optimize-runs=1",
-        "--evm-version=istanbul",
+        "--evm-version=london",
         "--strict-assembly"
     ]
     result = subprocess.run(command, capture_output=True, text=True)
@@ -83,7 +83,11 @@ file_paths = [
     'yul/Create2.yul',
     'yul/ForceSendEther.yul',
     'yul/GasLimitedCall.yul', 
-    'yul/GasLimitedStaticcall.yul'
+    'yul/GasLimitedStaticcall.yul',
+    'yul/Gas.yul',
+    'yul/Gasprice.yul',
+    'yul/Gaslimit.yul',
+    'yul/Basefee.yul'
 ]
 
 stats = [['file path', 'jump section', 'runtime bytes']]

@@ -10,7 +10,7 @@ def main():
             file_path,
             "--bin",
             "--optimize-runs=1",
-            "--evm-version=istanbul",
+            "--evm-version=london",
             "--strict-assembly"
         ]
         result = subprocess.run(command, capture_output=True, text=True)
