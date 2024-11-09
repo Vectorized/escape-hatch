@@ -67,46 +67,39 @@ async function main() {
     });
   };
 
+  let cachedSolcPath = '';
   const solcPath = async () => {
+    if (cachedSolcPath !== '') return cachedSolcPath;
     const minSolc = '0.8.28';
     const findSolc = (dir) => {
       const semverScore = s => {
-        let a = s.match(/\d+/g);
-        if (!a) return 0;
-        while (a.length < 3) a.push(0);
+        let a = (s + '.0.0.0').match(/\d+/g);
         return ~~a[0] * 1000000 + ~~a[1] * 1000 + ~~a[2];
       };
-      let maxSemVerScore = 0;
-      let bestPath = '';
-      const thres = semverScore(minSolc);
-      fs.readdirSync(dir).forEach(item => {
-        if (!fs.statSync(path.join(dir, item)).isDirectory()) return;
-        fs.readdirSync(path.join(dir, item)).forEach(executable => {
-          const p = path.join(dir, item, executable);
-          const score = semverScore(item);
-          if (score > maxSemVerScore && fs.statSync(p).isFile() && score >= thres) {
-            maxSemVerScore = score;
-            bestPath = p;
-          }
-        });
-      });
-      return bestPath;
+      const dirForEach = (d, f) =>
+        fs.existsSync(d) && fs.statSync(d).isDirectory() && fs.readdirSync(d).forEach(f);
+      let best = '';
+      dirForEach(dir, subDir => 
+        dirForEach(path.join(dir, subDir), executable => {
+          const p = path.join(dir, subDir, executable);
+          if (
+            semverScore(subDir) > semverScore(best) &&
+            semverScore(subDir) >= semverScore(minSolc) &&
+            fs.statSync(p).isFile()
+          ) best = p;
+        })
+      );
+      return best;
     };
-    const latestSolc = () => {
-      const homeDir = process.env.HOME || process.env.USERPROFILE;
-      let dir = path.join(homeDir, '.svm');
-      if (fs.existsSync(dir)) return findSolc(dir);
-      const xdgDataHome = process.env.XDG_DATA_HOME || path.join(homeDir, '.local', 'share');
-      dir = path.join(xdgDataHome, 'svm');
-      if (fs.existsSync(dir)) return findSolc(dir);  
-      return '';
-    }
-    let s = latestSolc();
-    if (s !== '') return s;
-    await runCommand('forge', ['build', '--use=' + minSolc]);
-    if ((s = latestSolc()) !== '') return s;
-    return 'solc';
+    const homeDir = process.env.HOME || process.env.USERPROFILE;
+    const latestSolc = () => [
+      path.join(homeDir, '.svm'),
+      path.join(process.env.XDG_DATA_HOME || path.join(homeDir, '.local', 'share'), 'svm')
+    ].map(findSolc).find(solc => solc) || '';
+    return cachedSolcPath = (latestSolc() || 
+      await runCommand('forge', ['build', '--use=' + minSolc]).then(latestSolc));
   };
+  if ((await solcPath()) === '') throw new Error("Cannot get Foundry's Solidity path");
   
   const compileYul = async (srcPath, evmVersion) => {
     return lastHex(await runCommand(await solcPath(), [
