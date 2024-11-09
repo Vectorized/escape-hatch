@@ -19,21 +19,18 @@ async function main() {
   const solcPath = async () => {
     if (cachedSolcPath !== '') return cachedSolcPath;
     const minSolc = '0.8.28';
+    const semverScore = s => ((s = (s + '.0.0.0').match(/\d+/g)) && 
+      (s[0] << 20) + (s[1] << 10) + ~~s[2]);
     const findSolc = (dir) => {
-      const semverScore = s => {
-        let a = (s + '.0.0.0').match(/\d+/g);
-        return ~~a[0] * 1000000 + ~~a[1] * 1000 + ~~a[2];
-      };
       const dirForEach = (d, f) =>
         fs.existsSync(d) && fs.statSync(d).isDirectory() && fs.readdirSync(d).forEach(f);
-      let best = '';
+      let best = '', p = '';
       dirForEach(dir, subDir => 
         dirForEach(path.join(dir, subDir), executable => {
-          const p = path.join(dir, subDir, executable);
           if (
             semverScore(subDir) > semverScore(best) &&
             semverScore(subDir) >= semverScore(minSolc) &&
-            fs.statSync(p).isFile()
+            fs.statSync(p = path.join(dir, subDir, executable)).isFile()
           ) best = p;
         })
       );
