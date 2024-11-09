@@ -4,7 +4,7 @@ EOF escape hatch contract.
 
 ## Requirements
 
-- Python
+- NodeJS or any other JS runtime
 - Foundry
 
 ## Usage
@@ -12,7 +12,7 @@ EOF escape hatch contract.
 ### Compile Escape Hatch
 
 ```shell
-$ python compile_combined.py
+$ node compile-combined.js
 ```
 
 ### Test
