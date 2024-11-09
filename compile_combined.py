@@ -6,27 +6,32 @@ import os
 SECTION_SHIFT = 6
 SECTION_LENGTH = 1 << SECTION_SHIFT
 
+def hex_len(s):
+    return len(s) >> 1
+
 def rpad_runtime(s):
-    global SECTION_LENGTH
-    n = (len(s) >> 1)
-    assert(n <= SECTION_LENGTH)
-    return s + (SECTION_LENGTH - n) * '00'
+    assert(hex_len(s) <= SECTION_LENGTH)
+    return s + (SECTION_LENGTH - hex_len(s)) * '00'
 
 def hex_no_prefix(x, n=None):
     s = hex(x).lower().replace('0x', '')
     s = '0' + s if (len(s) & 1) == 1 else s
-    if n is not None:
-        while (len(s) >> 1) < n:
-            s = '00' + s
-    return s
+    return s if n is None else '00' * min(0, n - hex_len(s)) + s
 
 def random_hex_no_prefix(n):
-    while True:
-        s = hex_no_prefix(random.randint(1, 1 << (8 * n)) | 1)
-        if len(s) == n * 2:
-            return s
+    return ''.join(random.choice('123456789abcdef') for _ in range(n * 2))
 
-def compile_and_get_runtime(file_path, jump_section, stats):
+def solc_command(file_path, evm_version):
+    return [
+        "solc",
+        file_path,
+        "--bin",
+        "--optimize-runs=1",
+        "--strict-assembly",
+        "--evm-version=" + evm_version
+    ]
+
+def compile_and_get_runtime(file_path, jump_section, use_push0, stats):
     with open(file_path, 'r') as file:
         code = file.read()
     
@@ -45,14 +50,9 @@ def compile_and_get_runtime(file_path, jump_section, stats):
     with open(temp_file_path, 'w') as file:
         file.write(code)
 
-    command = [
-        "solc",
-        temp_file_path,
-        "--bin",
-        "--optimize-runs=1",
-        "--evm-version=london",
-        "--strict-assembly"
-    ]
+    evm_version = "shanghai" if use_push0 else "london"
+    command = solc_command(temp_file_path, evm_version)
+
     result = subprocess.run(command, capture_output=True, text=True)
     runtime = '5b' + result.stdout.strip().split(sed_from)[-1]
     stats_row = [
@@ -63,23 +63,41 @@ def compile_and_get_runtime(file_path, jump_section, stats):
     stats.append(stats_row)
     os.remove(temp_file_path)
 
+    if use_push0:
+        runtime = runtime.replace('5f80', '5f5f')
+
     return rpad_runtime(runtime)
 
 def to_initcode(runtime):
     xxxx = hex_no_prefix(len(runtime) >> 1, 2)
     return '61' + xxxx + '80600a3d393df3' + runtime
 
-def compile_combined(file_paths, stats):
-    global SECTION_SHIFT
+def to_conditional_initcode(runtime_with_push0, runtime_without_push0):
+    xxxx = hex_no_prefix(len(runtime_with_push0) >> 1, 2)
+    assert(len(runtime_with_push0) == len(runtime_without_push0))
+    command = solc_command("yul/ConditionalInitcode.yul", "london")
+    result = subprocess.run(command, capture_output=True, text=True)
+    pre = re.findall(r'\b[0-9a-fA-F]+\b', result.stdout.strip())[-1]
+    pre = pre[pre.index('f3fe') + 4:]
+    pre = pre.replace('6033', '60' + hex_no_prefix(len(pre) >> 1, 1))
+    pre = pre.replace('61ffee', '61' + xxxx)
+    return pre + runtime_with_push0 + runtime_without_push0
+
+def compile_combined(file_paths, use_push0, stats):
     s = [rpad_runtime('3d353d1a60' + hex_no_prefix(SECTION_SHIFT) + '1b56')]
     for i, file_path in enumerate(file_paths):
-        s.append(compile_and_get_runtime(file_path, i + 1, stats))
+        s.append(compile_and_get_runtime(file_path, i + 1, use_push0, stats))
     return ''.join(s)
 
 def print_table(stats):
     col_widths = [max(len(str(c)) for c in column) for column in zip(*stats)]
     for row in stats:
         print("  ".join(str(c).ljust(w) for c, w in zip(row, col_widths)))
+
+def keccak256_of_hex(hex_string):
+    command = ["cast", "k", "0x" + hex_string]
+    result = subprocess.run(command, capture_output=True, text=True)
+    return result.stdout.strip()
 
 file_paths = [
     'yul/Extcodesize.yul', 
@@ -97,20 +115,26 @@ file_paths = [
 ]
 
 stats = [['file path', 'jump section', 'runtime bytes']]
-runtime = compile_combined(file_paths, stats)
-with open('test/data/runtime.txt', 'w') as file:
-    file.write(runtime)
+runtime_with_push0 = compile_combined(file_paths, True, stats)
+runtime_without_push0 = compile_combined(file_paths, False, [])
+with open('deployments/runtime_with_push0.txt', 'w') as file:
+    file.write(runtime_with_push0)
+with open('deployments/runtime_without_push0.txt', 'w') as file:
+    file.write(runtime_without_push0)
 
-initcode = to_initcode(runtime)
-with open('test/data/initcode.txt', 'w') as file:
+initcode = to_conditional_initcode(runtime_with_push0, runtime_without_push0)
+with open('deployments/initcode.txt', 'w') as file:
     file.write(initcode)
 
 print_table(stats)
+print('-' * 64)
+print('initcodehash:')
+print(keccak256_of_hex(initcode))
 print('-' * 64)
 print('initcode:')
 print(initcode)
 print('-' * 64)
 
-print('runtime (' + str(len(runtime) >> 1) + ' bytes):')
-print(runtime)
+print('runtime (' + str(len(runtime_with_push0) >> 1) + ' bytes):')
+print(runtime_with_push0)
 print('-' * 64)
