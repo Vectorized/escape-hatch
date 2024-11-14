@@ -4,7 +4,7 @@ EOF escape hatch contract.
 
 ## Requirements
 
-- Python
+- NodeJS or any other JS runtime
 - Foundry
 
 ## Usage
@@ -12,7 +12,7 @@ EOF escape hatch contract.
 ### Compile Escape Hatch
 
 ```shell
-$ python compile_combined.py
+$ node compile-combined.js
 ```
 
 ### Test
@@ -20,3 +20,11 @@ $ python compile_combined.py
 ```shell
 $ forge test
 ```
+
+## Safety
+
+This is **experimental software** and is provided on an "as is" and "as available" basis.
+
+We **do not give any warranties** and **will not be liable for any loss** incurred through any use of this codebase.
+
+Escape-hatch is still a work in progress.

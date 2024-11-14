@@ -6,7 +6,7 @@ object "Basefee" {
     object "runtime" {
         code {
             mstore(returndatasize(), basefee())
-            return(returndatasize(), 0x20)
+            return(returndatasize(), msize())
         }
     }
 }
