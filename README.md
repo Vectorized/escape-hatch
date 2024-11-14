@@ -20,3 +20,11 @@ $ node compile-combined.js
 ```shell
 $ forge test
 ```
+
+## Safety
+
+This is **experimental software** and is provided on an "as is" and "as available" basis.
+
+We **do not give any warranties** and **will not be liable for any loss** incurred through any use of this codebase.
+
+Escape-hatch is still a work in progress.
